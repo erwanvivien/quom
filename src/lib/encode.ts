@@ -1,46 +1,12 @@
-import { FileSystemWritableFileStreamTarget, Muxer as Mp4Muxer } from 'mp4-muxer';
-
-type Kind = 'mp4';
-
-type OwnMuxer = {
-	finalize: () => void;
-	encoder: EncodedVideoChunkOutputCallback;
-};
-
-const mp4output: (fileStream: FileSystemWritableFileStream) => OwnMuxer = (fileStream) => {
-	const muxer = new Mp4Muxer({
-		target: new FileSystemWritableFileStreamTarget(fileStream),
-		video: {
-			codec: 'avc',
-			width: 1280,
-			height: 720
-		},
-		fastStart: false
-	});
-
-	let firstTimeStamp: number | undefined = undefined;
-
-	return {
-		encoder: (chunk, meta) => {
-			console.log('encode');
-			if (firstTimeStamp === undefined) {
-				firstTimeStamp = chunk.timestamp;
-			}
-
-			const time = chunk.timestamp - firstTimeStamp;
-			console.log('time', time);
-
-			muxer.addVideoChunk(chunk, meta, chunk.timestamp - firstTimeStamp);
-		},
-		finalize: () => muxer.finalize()
-	};
-};
+import { mp4output } from './mp4/encode';
+import type { Kind, OwnMuxer } from './types';
 
 type CreateEncoder = (
 	kind: Kind,
 	fileStream: FileSystemWritableFileStream
 ) => {
 	encoder: VideoEncoder;
+	setDecodedFrameCount: (count: number) => void;
 	close: () => Promise<void>;
 };
 
@@ -55,10 +21,32 @@ const CONFIGS: { [key in Kind]: VideoEncoderConfig } = {
 export const createEncoder: CreateEncoder = (kind, fileStream) => {
 	const { finalize: muxerFinalize, encoder: output } = muxers[kind](fileStream);
 
+	let encodedFrameCount = 0;
+	let decodedFrameCount: number | undefined;
+
+	let resolve: () => void = () => {};
+	const close = new Promise<void>((r) => {
+		resolve = r;
+	});
+
 	const encoder = new VideoEncoder({
-		output,
+		output: (chunk, meta) => {
+			output(chunk, meta);
+			encodedFrameCount += 1;
+
+			if (encodedFrameCount % 100 === 0) {
+				console.log('encoded', encodedFrameCount, 'frames');
+			}
+
+			if (decodedFrameCount !== undefined && encodedFrameCount >= decodedFrameCount) {
+				encoder.flush().then(() => {
+					muxerFinalize();
+					resolve();
+				});
+			}
+		},
 		error: (error) => {
-			console.log('error', error);
+			console.error('error', error);
 		}
 	});
 
@@ -66,9 +54,9 @@ export const createEncoder: CreateEncoder = (kind, fileStream) => {
 
 	return {
 		encoder,
-		close: async () => {
-			await encoder.flush();
-			muxerFinalize();
-		}
+		setDecodedFrameCount: (count: number) => {
+			decodedFrameCount = count;
+		},
+		close: () => close
 	};
 };

@@ -29,13 +29,13 @@
 		const stream = fileStream;
 		assertDefined(stream);
 
-		const { encoder, close } = createEncoder('mp4', stream);
-		decode('mp4', files[0], encoder);
-
-		setTimeout(async () => {
-			await close();
+		const Encoder = createEncoder('mp4', stream);
+		decode('mp4', files[0], Encoder.encoder).then(async (decodedFrameCount: number) => {
+			console.log('Waiting close ', decodedFrameCount);
+			Encoder.setDecodedFrameCount(decodedFrameCount);
+			await Encoder.close();
 			stream.close(); // Make sure to close the stream
-		}, 5000);
+		});
 	}
 </script>
 
