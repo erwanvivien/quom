@@ -30,7 +30,7 @@
 		assertDefined(stream);
 
 		const { encoder, close } = createEncoder('mp4', stream);
-		decode(files[0], encoder);
+		decode('mp4', files[0], encoder);
 
 		setTimeout(async () => {
 			await close();
