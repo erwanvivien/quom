@@ -1,2 +1,17 @@
-<h1>Welcome to SvelteKit</h1>
-<p>Visit <a href="https://kit.svelte.dev">kit.svelte.dev</a> to read the documentation</p>
+<script lang="ts">
+	import Main from './main.svelte';
+
+	let supported = true;
+
+	// Ensure to check for browser support for Web Codecs
+	if (typeof window !== 'undefined' && (!window.VideoEncoder || !window.VideoDecoder)) {
+		console.error('Web Codecs API is not supported in this browser.');
+		supported = false;
+	}
+</script>
+
+{#if supported}
+	<Main />
+{:else}
+	<p>Web Codecs API is not supported in this browser.</p>
+{/if}
