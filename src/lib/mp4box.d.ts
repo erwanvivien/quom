@@ -170,13 +170,40 @@ declare module 'mp4box' {
 			length: number;
 			nalu: Uint8Array;
 		}[];
-
-		nb_PPS_nalus: number;
-		PPS: {
-			length: number;
-			nalu: Uint8Array;
-		}[];
 	}
+
+	export type Entry = {
+		// Video
+		avcC?: {
+			write: (stream: DataStream) => void;
+		};
+		hvcC?: {
+			write: (stream: DataStream) => void;
+		};
+		vpcC?: {
+			write: (stream: DataStream) => void;
+		};
+		av1C?: {
+			write: (stream: DataStream) => void;
+		};
+
+		// Audio
+		esds?: {
+			esd: {
+				tag: number;
+				oti: number;
+				descs: {
+					tag: number;
+					oti: number;
+					descs: {
+						tag: number;
+						data: Uint8Array;
+						size: number;
+					}[];
+				}[];
+			};
+		};
+	};
 
 	export type Entry = {
 		avcC?: {

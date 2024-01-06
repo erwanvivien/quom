@@ -1,26 +1,42 @@
 import type { OwnMuxer } from '$lib/types';
 import { FileSystemWritableFileStreamTarget, Muxer as Mp4Muxer } from 'mp4-muxer';
 
-export const mp4output: (fileStream: FileSystemWritableFileStream) => OwnMuxer = (fileStream) => {
+export const mp4output: (
+	fileStream: FileSystemWritableFileStream,
+	params: { width: number; height: number }
+) => OwnMuxer = (fileStream, params) => {
 	const muxer = new Mp4Muxer({
 		target: new FileSystemWritableFileStreamTarget(fileStream),
 		video: {
 			codec: 'avc',
-			width: 1280,
-			height: 720
+			width: params.width,
+			height: params.height
+		},
+		audio: {
+			codec: 'aac',
+			numberOfChannels: 2,
+			sampleRate: 44100
 		},
 		fastStart: false
 	});
 
-	let firstTimeStamp: number | undefined = undefined;
+	let videoFirstTimeStamp: number | undefined = undefined;
+	let audioFirstTimeStamp: number | undefined = undefined;
 
 	return {
-		encoder: (chunk, meta) => {
-			if (firstTimeStamp === undefined) {
-				firstTimeStamp = chunk.timestamp;
+		encodeFrame: (chunk, meta) => {
+			if (videoFirstTimeStamp === undefined) {
+				videoFirstTimeStamp = chunk.timestamp;
 			}
 
-			muxer.addVideoChunk(chunk, meta, chunk.timestamp - firstTimeStamp);
+			muxer.addVideoChunk(chunk, meta, chunk.timestamp - videoFirstTimeStamp);
+		},
+		encodeAudio: (chunk, meta) => {
+			if (audioFirstTimeStamp === undefined) {
+				audioFirstTimeStamp = chunk.timestamp;
+			}
+
+			muxer.addAudioChunk(chunk, meta, chunk.timestamp - audioFirstTimeStamp);
 		},
 		finalize: () => muxer.finalize()
 	};

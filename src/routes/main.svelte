@@ -7,7 +7,7 @@
 	let statuses: number[];
 	let directoryStream: FileSystemDirectoryHandle | undefined;
 
-	const askForFolder = async () => {
+	const askForFolder = async (): Promise<FileSystemDirectoryHandle> => {
 		return await window.showDirectoryPicker({ id: 'quom' });
 	};
 
@@ -24,11 +24,19 @@
 
 		const Encoder = createEncoder('mp4', fileStream, callback);
 
-		const decodedFrameCount = await decode('mp4', file, Encoder.encoder);
-		console.log('Waiting close ', decodedFrameCount);
-		Encoder.setDecodedFrameCount(decodedFrameCount);
+		const { frameCount, audioCount } = await decode(
+			'mp4',
+			file,
+			Encoder.videoEncoder,
+			Encoder.audioEncoder
+		);
+
+		Encoder.setDecodedFrameCount(frameCount);
+		Encoder.setDecodedAudioCount(audioCount);
 		await Encoder.close();
 		fileStream.close(); // Make sure to close the stream
+
+		console.log('Done', file.name);
 	};
 
 	$: if (files && files.length !== 0) {

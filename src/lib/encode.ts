@@ -6,37 +6,54 @@ type CreateEncoder = (
 	fileStream: FileSystemWritableFileStream,
 	callback: (progress: number) => void
 ) => {
-	encoder: VideoEncoder;
+	videoEncoder: VideoEncoder;
+	audioEncoder: AudioEncoder;
 	setDecodedFrameCount: (count: number) => void;
+	setDecodedAudioCount: (count: number) => void;
 	close: () => Promise<void>;
 };
 
-const muxers: { [key in Kind]: (fileStream: FileSystemWritableFileStream) => OwnMuxer } = {
+const muxers: {
+	[key in Kind]: (
+		fileStream: FileSystemWritableFileStream,
+		params: { width: number; height: number }
+	) => OwnMuxer;
+} = {
 	mp4: mp4output
 };
 
-const CONFIGS: { [key in Kind]: VideoEncoderConfig } = {
-	mp4: { codec: 'avc1.42001f', width: 640, height: 360, bitrate: 1000000 }
+const CONFIGS: { [key in Kind]: { video: VideoEncoderConfig; audio: AudioEncoderConfig } } = {
+	mp4: {
+		video: { codec: 'avc1.42001f', width: 640, height: 360, bitrate: 1_000_000 },
+		audio: { codec: 'mp4a.40.2', bitrate: 128000, numberOfChannels: 2, sampleRate: 44100 }
+	}
 };
 
 export const createEncoder: CreateEncoder = (kind, fileStream, callback) => {
-	const { finalize: muxerFinalize, encoder: output } = muxers[kind](fileStream);
+	const {
+		finalize: muxerFinalize,
+		encodeFrame,
+		encodeAudio
+	} = muxers[kind](fileStream, { width: 640, height: 360 });
 
 	let encodedFrameCount = 0;
 	let decodedFrameCount: number | undefined;
+
+	let encodedAudioCount = 0;
+	let decodedAudioCount: number | undefined;
 
 	let resolve: () => void = () => {};
 	const close = new Promise<void>((r) => {
 		resolve = r;
 	});
 
-	const encoder = new VideoEncoder({
+	const videoEncoder = new VideoEncoder({
 		output: (chunk, meta) => {
-			output(chunk, meta);
+			encodeFrame(chunk, meta);
 			encodedFrameCount += 1;
 
 			if (encodedFrameCount % 100 === 0) {
-				console.log('encoded', encodedFrameCount, 'frames');
+				console.log('encoded', encodedFrameCount, 'frames out of ', decodedFrameCount ?? 'unknown');
 			}
 
 			if (decodedFrameCount !== undefined) {
@@ -44,9 +61,11 @@ export const createEncoder: CreateEncoder = (kind, fileStream, callback) => {
 			}
 
 			if (decodedFrameCount !== undefined && encodedFrameCount >= decodedFrameCount) {
-				encoder.flush().then(() => {
-					muxerFinalize();
-					resolve();
+				videoEncoder.flush().then(() => {
+					if (decodedAudioCount !== undefined && encodedAudioCount >= decodedAudioCount) {
+						muxerFinalize();
+						resolve();
+					}
 				});
 			}
 		},
@@ -55,12 +74,36 @@ export const createEncoder: CreateEncoder = (kind, fileStream, callback) => {
 		}
 	});
 
-	encoder.configure(CONFIGS[kind]);
+	const audioEncoder = new AudioEncoder({
+		output: (chunk, meta) => {
+			encodeAudio(chunk, meta);
+		},
+		error: (error) => {
+			encodedAudioCount += 1;
+
+			console.error('error', error);
+			if (decodedAudioCount !== undefined && encodedAudioCount >= decodedAudioCount) {
+				videoEncoder.flush().then(() => {
+					if (decodedFrameCount !== undefined && encodedFrameCount >= decodedFrameCount) {
+						muxerFinalize();
+						resolve();
+					}
+				});
+			}
+		}
+	});
+
+	videoEncoder.configure(CONFIGS[kind].video);
+	audioEncoder.configure(CONFIGS[kind].audio);
 
 	return {
-		encoder,
+		videoEncoder,
+		audioEncoder,
 		setDecodedFrameCount: (count: number) => {
 			decodedFrameCount = count;
+		},
+		setDecodedAudioCount: (count: number) => {
+			decodedAudioCount = count;
 		},
 		close: () => close
 	};
