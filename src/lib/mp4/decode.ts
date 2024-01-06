@@ -1,61 +1,7 @@
+import { assertDefined } from '$lib/utils';
 import * as MP4Box from 'mp4box';
-import { assertDefined } from '../utils';
 
-const getExtradata = (avccBox: MP4Box.AvcC) => {
-	// generate the property "description" for the object used in VideoDecoder.configure
-	// This function has been written by Thomas Guilbert from Google
-
-	let size = 7;
-	for (let i = 0; i < avccBox.SPS.length; i++) size += 2 + avccBox.SPS[i].length;
-	for (let i = 0; i < avccBox.PPS.length; i++) size += 2 + avccBox.PPS[i].length;
-
-	let index = 0;
-	const data = new Uint8Array(size);
-
-	const writeUint8 = (value: number) => {
-		data.set([value], index);
-		index++;
-	};
-
-	const writeUint16 = (value: number) => {
-		const arr = new Uint8Array(1);
-		arr[0] = value;
-		const buffer = new Uint8Array(arr.buffer);
-		data.set([buffer[1], buffer[0]], index);
-		index += 2;
-	};
-
-	const writeUint8Array = (value: ArrayLike<number>) => {
-		data.set(value, index);
-		index += value.length;
-	};
-
-	writeUint8(avccBox.configurationVersion);
-	writeUint8(avccBox.AVCProfileIndication);
-	writeUint8(avccBox.profile_compatibility);
-	writeUint8(avccBox.AVCLevelIndication);
-	writeUint8(avccBox.lengthSizeMinusOne + (63 << 2));
-
-	writeUint8(avccBox.nb_SPS_nalus + (7 << 5));
-	for (let i = 0; i < avccBox.SPS.length; i++) {
-		writeUint16(avccBox.SPS[i].length);
-		writeUint8Array(avccBox.SPS[i].nalu);
-	}
-
-	writeUint8(avccBox.nb_PPS_nalus);
-	for (let i = 0; i < avccBox.PPS.length; i++) {
-		writeUint16(avccBox.PPS[i].length);
-		writeUint8Array(avccBox.PPS[i].nalu);
-	}
-
-	if (index !== size) {
-		throw 'size mismatched !';
-	}
-
-	return data;
-};
-
-export const decode = (file: File, encoder: VideoEncoder) =>
+export const decode = (file: File, videoEncoder: VideoEncoder) =>
 	new Promise<number>((resolve) => {
 		let offset = 0;
 
@@ -65,9 +11,9 @@ export const decode = (file: File, encoder: VideoEncoder) =>
 
 		let decodedFrames = 0;
 
-		const decoder = new VideoDecoder({
+		const videoDecoder = new VideoDecoder({
 			output: (chunk) => {
-				encoder.encode(chunk);
+				videoEncoder.encode(chunk);
 				chunk.close();
 			},
 			error: (err) => {
@@ -79,19 +25,23 @@ export const decode = (file: File, encoder: VideoEncoder) =>
 			if (info && info.videoTracks && info.videoTracks[0]) {
 				const [{ codec }] = info.videoTracks;
 
-				let avccBox: MP4Box.AvcC | undefined;
+				let videoDescription: Uint8Array | undefined = undefined;
 				for (const trak of mp4boxfile.moov.traks) {
-					if (trak.mdia?.minf?.stbl?.stsd?.entries[0].avcC) {
-						avccBox = trak.mdia?.minf?.stbl?.stsd?.entries[0].avcC;
+					const entry = trak.mdia?.minf?.stbl?.stsd?.entries[0];
+					// from https://github.com/w3c/webcodecs/blob/446d831/samples/audio-video-player/mp4_pull_demuxer.js#L171-L179
+					const box = entry?.avcC || entry?.hvcC || entry?.vpcC || entry?.av1C; //
+					if (box) {
+						const stream = new MP4Box.DataStream(undefined, 0, MP4Box.DataStream.BIG_ENDIAN);
+						box.write(stream);
+						videoDescription = new Uint8Array(stream.buffer, 8); // Remove the box header.
 						break;
 					}
 				}
 
-				assertDefined(avccBox, 'avccBox is undefined');
-				const extradata = getExtradata(avccBox);
+				assertDefined(videoDescription, 'No video description found');
 
 				// configure decoder
-				decoder.configure({ codec, description: extradata });
+				videoDecoder.configure({ codec, description: videoDescription });
 
 				// Setup mp4box file for breaking it into chunks
 				mp4boxfile.setExtractionOptions(info.videoTracks[0].id);
@@ -106,14 +56,14 @@ export const decode = (file: File, encoder: VideoEncoder) =>
 			for (let i = 0; i < samples.length; i += 1) {
 				const sample = samples[i];
 
-				const chunk = new EncodedVideoChunk({
+				const videoChunk = new EncodedVideoChunk({
 					type: sample.is_sync ? 'key' : 'delta',
 					timestamp: (1e6 * sample.cts) / sample.timescale, // from https://github.com/gpac/mp4box.js/issues/374
 					duration: (1e6 * sample.duration) / sample.timescale,
 					data: sample.data
 				});
 
-				decoder.decode(chunk);
+				videoDecoder.decode(videoChunk);
 			}
 		};
 

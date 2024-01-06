@@ -9,9 +9,9 @@ export function assertNever(value: never, message?: string): never {
 }
 
 export const fileNameAndExtension = (file: File): [name: string, extension: string] => {
-    const split = file.name.split('.');
-    const extension = split.pop() ?? "";
-    const name = split.join('.');
+	const split = file.name.split('.');
+	const extension = split.pop() ?? '';
+	const name = split.join('.');
 
-    return [ name, extension ];
-}
+	return [name, extension];
+};

@@ -178,19 +178,27 @@ declare module 'mp4box' {
 		}[];
 	}
 
+	export type Entry = {
+		avcC?: {
+			write: (stream: DataStream) => void;
+		};
+		hvcC?: {
+			write: (stream: DataStream) => void;
+		};
+		vpcC?: {
+			write: (stream: DataStream) => void;
+		};
+		av1C?: {
+			write: (stream: DataStream) => void;
+		};
+	};
+
 	export interface Trak {
 		mdia?: {
 			minf?: {
 				stbl?: {
 					stsd?: {
-						entries: {
-							avcC?: {
-								write: (stream: DataStream) => void;
-							} & AvcC;
-							hvcC?: {
-								write: (stream: DataStream) => void;
-							};
-						}[];
+						entries: Entry[];
 					};
 				};
 			};
