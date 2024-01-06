@@ -57,7 +57,6 @@ const getExtradata = (avccBox: MP4Box.AvcC) => {
 
 export const decode = (file: File, encoder: VideoEncoder) =>
 	new Promise<number>((resolve) => {
-		console.time('Starting');
 		let offset = 0;
 
 		// Uses mp4box for demuxing
