@@ -1,9 +1,10 @@
 import type { FileMeta } from './decode';
 import { mp4output } from './mp4/encode';
-import type { Kind, OwnMuxer } from './types';
+import type { Kind } from './types';
 
 type CreateEncoder = (
 	metadata: FileMeta,
+	config: VideoEncoderConfig,
 	fileStream: FileSystemWritableFileStream,
 	callback: (progress: number) => void
 ) => {
@@ -12,28 +13,25 @@ type CreateEncoder = (
 	close: () => Promise<void>;
 };
 
-const muxers: {
-	[key in Kind]: (
-		fileStream: FileSystemWritableFileStream,
-		params: { width: number; height: number }
-	) => OwnMuxer;
-} = {
+const muxers: { [key in Kind]: typeof mp4output } = {
 	mp4: mp4output
 };
 
-export const createEncoder: CreateEncoder = (metadata, fileStream, callback) => {
+export const createEncoder: CreateEncoder = (metadata, videoConfig, fileStream, callback) => {
 	const {
 		finalize: muxerFinalize,
 		encodeFrame,
 		encodeAudio
-	} = muxers[metadata.kind](fileStream, { width: 640, height: 360 });
+	} = muxers[metadata.kind](fileStream, videoConfig, { width: 640, height: 360 });
 
 	let encodedFrameCount = 0;
 	let encodedSampleCount = 0;
 
 	let resolve: () => void = () => {};
-	const close = new Promise<void>((r) => {
-		resolve = r;
+	let reject: (error: DOMException) => void = () => {};
+	const close = new Promise<void>((res, rej) => {
+		resolve = res;
+		reject = rej;
 	});
 
 	const {
@@ -64,6 +62,7 @@ export const createEncoder: CreateEncoder = (metadata, fileStream, callback) => 
 		},
 		error: (error) => {
 			console.error('error', error);
+			reject(error);
 		}
 	});
 
@@ -86,11 +85,26 @@ export const createEncoder: CreateEncoder = (metadata, fileStream, callback) => 
 				});
 			}
 		},
-		error: (error) => console.error('error', error)
+		error: (error) => {
+			console.error('error', error);
+			reject(error);
+		}
 	});
 
-	videoEncoder.configure(metadata.video);
-	audioEncoder.configure(metadata.audio);
+	const audioConfig: AudioEncoderConfig = {
+		...metadata.audio,
+		bitrate: 128000 // Default to 128kbps
+	};
+
+	for (const validBitrates of [96000, 128000, 160000, 192000]) {
+		if (validBitrates >= metadata.audio.bitrate) {
+			audioConfig.bitrate = validBitrates;
+			break;
+		}
+	}
+
+	videoEncoder.configure(videoConfig);
+	audioEncoder.configure(audioConfig);
 
 	return {
 		videoEncoder,

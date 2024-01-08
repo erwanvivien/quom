@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { decode, getMetadata } from '$lib/decode';
 	import { createEncoder } from '$lib/encode';
-	import { assertDefined, fileNameAndExtension } from '$lib/utils';
+	import { assertDefined, fileNameAndExtension, getSupportedVideoConfigs } from '$lib/utils';
 	import MainScreen from '../components/main_screen.svelte';
 	import Progress from '../components/progress.svelte';
 	import Folder from '../components/svgs/folder.svelte';
@@ -10,6 +10,13 @@
 	let statuses: number[];
 	let directoryStream: FileSystemDirectoryHandle | undefined;
 
+	let config: VideoEncoderConfig | undefined;
+
+	if (typeof window !== 'undefined') {
+		// Inits the first config
+		getSupportedVideoConfigs().then((configs) => (config = configs[0]));
+	}
+
 	const askForFolder = async (): Promise<void> => {
 		directoryStream = await window.showDirectoryPicker({ id: 'quom' });
 	};
@@ -17,6 +24,7 @@
 	const decodeOne = async (file: File, callback: (progress: number) => void) => {
 		const directoryHandle = directoryStream;
 		assertDefined(directoryHandle);
+		assertDefined(config);
 
 		const [fileName, ext] = fileNameAndExtension(file);
 
@@ -25,14 +33,19 @@
 		});
 		const fileStream = await fileHandle.createWritable();
 
-		const metadata = await getMetadata(file);
-		const Encoder = createEncoder(metadata, fileStream, callback);
+		try {
+			const metadata = await getMetadata(file);
+			const Encoder = createEncoder(metadata, config, fileStream, callback);
 
-		await decode(metadata.kind, file, Encoder.videoEncoder, Encoder.audioEncoder);
-		await Encoder.close();
-		fileStream.close(); // Make sure to close the stream
+			await decode(metadata.kind, file, Encoder.videoEncoder, Encoder.audioEncoder);
+			await Encoder.close();
 
-		console.log('Done', file.name);
+			console.log('Done', file.name);
+		} catch (e) {
+			console.error(e);
+		} finally {
+			fileStream.close();
+		}
 	};
 
 	$: if (files && files.length !== 0) {
