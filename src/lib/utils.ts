@@ -1,4 +1,7 @@
-export function assertDefined(value: unknown, message?: string): asserts value {
+export function assertDefined(
+	value: unknown,
+	message?: string
+): asserts value is NonNullable<typeof value> {
 	if (value === undefined || value === null) {
 		throw new Error(message ?? value + ' is not defined');
 	}
@@ -20,4 +23,24 @@ export const fileNameAndExtension = (file: File): [name: string, extension: stri
 	const name = split.join('.');
 
 	return [name, extension];
+};
+
+/**
+ * `match` is a string of hex values, e.g. "FFD8FF" and can have * wildcards
+ */
+export const arrayMatches = (array: Uint8Array, match: (number | '*')[]): boolean => {
+	for (let i = 0; i < match.length; i++) {
+		const matchValue = match[i];
+		const arrayValue = array[i];
+
+		if (matchValue === '*') {
+			continue;
+		}
+
+		if (matchValue !== arrayValue) {
+			return false;
+		}
+	}
+
+	return true;
 };

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { decode } from '$lib/decode';
+	import { decode, getMetadata } from '$lib/decode';
 	import { createEncoder } from '$lib/encode';
 	import { assertDefined, fileNameAndExtension } from '$lib/utils';
 	import MainScreen from '../components/main_screen.svelte';
@@ -25,17 +25,10 @@
 		});
 		const fileStream = await fileHandle.createWritable();
 
-		const Encoder = createEncoder('mp4', fileStream, callback);
+		const metadata = await getMetadata(file);
+		const Encoder = createEncoder(metadata, fileStream, callback);
 
-		const { frameCount, audioCount } = await decode(
-			'mp4',
-			file,
-			Encoder.videoEncoder,
-			Encoder.audioEncoder
-		);
-
-		Encoder.setDecodedFrameCount(frameCount);
-		Encoder.setDecodedAudioCount(audioCount);
+		await decode(metadata.kind, file, Encoder.videoEncoder, Encoder.audioEncoder);
 		await Encoder.close();
 		fileStream.close(); // Make sure to close the stream
 
@@ -57,7 +50,7 @@
 		}
 
 		promise.then(() => {
-			console.log('Done');
+			console.log('Done all files');
 		});
 	}
 </script>

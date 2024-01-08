@@ -1,6 +1,69 @@
-import type { FrameAndAudioCount } from '$lib/decode';
+import type { FileMeta, FrameAndAudioCount } from '$lib/decode';
 import { assert, assertDefined } from '$lib/utils';
 import * as MP4Box from 'mp4box';
+
+export const getFileMeta = (file: File) =>
+	new Promise<FileMeta>((resolve) => {
+		const mp4boxfile = MP4Box.createFile();
+		const reader = file.stream().getReader();
+
+		let ready = false;
+
+		mp4boxfile.onReady = (info) => {
+			console.log('READY', info);
+			ready = true;
+
+			const [{ codec: videoCodec }] = info.videoTracks;
+			const [{ codec: audioCodec }] = info.audioTracks;
+
+			const { channel_count, sample_rate } = info.audioTracks[0].audio;
+			const { bitrate: audioBitrate, nb_samples: sampleCount } = info.audioTracks[0];
+
+			const {
+				track_height: height,
+				track_width: width,
+				bitrate: videoBitrate
+			} = info.videoTracks[0];
+			const frameCount = info.videoTracks[0].nb_samples;
+
+			resolve({
+				kind: 'mp4',
+				video: {
+					codec: videoCodec,
+					width,
+					height,
+					bitrate: videoBitrate,
+					frameCount: frameCount - 1
+				},
+				audio: {
+					codec: audioCodec,
+					numberOfChannels: channel_count,
+					sampleRate: sample_rate,
+					bitrate: audioBitrate,
+					sampleCount: sampleCount - 1
+				}
+			});
+		};
+
+		let offset = 0;
+		function appendBuffers({ done, value }: ReadableStreamReadResult<Uint8Array>) {
+			if (done || ready) {
+				mp4boxfile.flush();
+				return;
+			}
+
+			// We need to cast the value to MP4ArrayBuffer and we then add the fileStart property to it
+			// Otherwise, we lose the ArrayBuffer type
+			const buf = value.buffer as MP4Box.MP4ArrayBuffer;
+			buf.fileStart = offset;
+			offset += buf.byteLength;
+			mp4boxfile.appendBuffer(buf);
+
+			reader.read().then(appendBuffers);
+		}
+
+		reader.read().then(appendBuffers);
+	});
 
 export const decode = (file: File, videoEncoder: VideoEncoder, audioEncoder: AudioEncoder) =>
 	new Promise<FrameAndAudioCount>((resolve) => {
