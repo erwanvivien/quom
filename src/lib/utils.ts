@@ -17,6 +17,8 @@ export function assert(condition: boolean, message?: string): asserts condition 
 	}
 }
 
+export const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 export const fileNameAndExtension = (file: File): [name: string, extension: string] => {
 	const split = file.name.split('.');
 	const extension = split.pop() ?? '';

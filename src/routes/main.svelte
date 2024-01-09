@@ -38,6 +38,7 @@
 			const Encoder = createEncoder(metadata, config, fileStream, callback);
 
 			await decode(metadata.kind, file, Encoder.videoEncoder, Encoder.audioEncoder);
+			console.log("Done decoding, flushing encoder")
 			await Encoder.close();
 
 			console.log('Done', file.name);

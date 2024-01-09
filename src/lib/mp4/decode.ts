@@ -2,6 +2,17 @@ import type { FileMeta, FrameAndAudioCount } from '$lib/decode';
 import { assert, assertDefined } from '$lib/utils';
 import * as MP4Box from 'mp4box';
 
+const audioConfigFromPartial = (
+	audioConfig: Partial<NonNullable<FileMeta['audio']>>
+): FileMeta['audio'] | undefined => {
+	const { bitrate, codec, numberOfChannels, sampleCount, sampleRate } = audioConfig;
+	if (codec && numberOfChannels && sampleRate && bitrate && sampleCount) {
+		return { codec, numberOfChannels, sampleRate, bitrate, sampleCount };
+	}
+
+	return undefined;
+};
+
 export const getFileMeta = (file: File) =>
 	new Promise<FileMeta>((resolve) => {
 		const mp4boxfile = MP4Box.createFile();
@@ -13,11 +24,15 @@ export const getFileMeta = (file: File) =>
 			console.log('READY', info);
 			ready = true;
 
-			const [{ codec: videoCodec }] = info.videoTracks;
-			const [{ codec: audioCodec }] = info.audioTracks;
+			const videoCodec = info.videoTracks?.[0]?.codec;
 
-			const { channel_count, sample_rate } = info.audioTracks[0].audio;
-			const { bitrate: audioBitrate, nb_samples: sampleCount } = info.audioTracks[0];
+			const audioConfig: FileMeta['audio'] | undefined = audioConfigFromPartial({
+				codec: info.audioTracks?.[0]?.codec,
+				numberOfChannels: info.audioTracks?.[0]?.audio?.channel_count,
+				sampleRate: info.audioTracks?.[0]?.audio?.sample_rate,
+				bitrate: info.audioTracks?.[0]?.bitrate,
+				sampleCount: info.audioTracks?.[0]?.nb_samples
+			});
 
 			const {
 				track_height: height,
@@ -35,13 +50,7 @@ export const getFileMeta = (file: File) =>
 					bitrate: videoBitrate,
 					frameCount: frameCount - 1
 				},
-				audio: {
-					codec: audioCodec,
-					numberOfChannels: channel_count,
-					sampleRate: sample_rate,
-					bitrate: audioBitrate,
-					sampleCount: sampleCount - 1
-				}
+				audio: audioConfig
 			});
 		};
 
@@ -65,14 +74,17 @@ export const getFileMeta = (file: File) =>
 		reader.read().then(appendBuffers);
 	});
 
-export const decode = (file: File, videoEncoder: VideoEncoder, audioEncoder: AudioEncoder) =>
+export const decode = (file: File, videoEncoder: VideoEncoder, audioEncoder?: AudioEncoder) =>
 	new Promise<FrameAndAudioCount>((resolve) => {
 		// Uses mp4box for demuxing
 		const mp4boxfile = MP4Box.createFile();
 		const reader = file.stream().getReader();
 
 		let decodedFrames = 0;
-		let decodedAudio = 0;
+		let decodedSamples = 0;
+
+		let frameCount = 0;
+		let sampleCount = 0;
 
 		const videoDecoder = new VideoDecoder({
 			output: (chunk) => {
@@ -84,25 +96,32 @@ export const decode = (file: File, videoEncoder: VideoEncoder, audioEncoder: Aud
 			}
 		});
 
-		const audioDecoder = new AudioDecoder({
-			output: (chunk) => {
-				audioEncoder.encode(chunk);
-				chunk.close();
-			},
-			error: (err) => {
-				console.error(err);
-			}
-		});
+		let audioDecoder: AudioDecoder | undefined;
+		if (audioEncoder) {
+			audioDecoder = new AudioDecoder({
+				output: (chunk) => {
+					audioEncoder.encode(chunk);
+					chunk.close();
+				},
+				error: (err) => {
+					console.error(err);
+				}
+			});
+		}
 
 		const videoTracks = new Set<number>();
 		const audioTracks = new Set<number>();
 
 		mp4boxfile.onReady = (info) => {
 			if (info && info.videoTracks && info.videoTracks[0]) {
-				const [{ codec: videoCodec }] = info.videoTracks;
-				const [{ codec: audioCodec }] = info.audioTracks;
+				const videoCodec = info.videoTracks?.[0]?.codec;
+				const audioCodec = info.audioTracks?.[0]?.codec;
 
-				const { channel_count, sample_rate } = info.audioTracks[0].audio;
+				frameCount = info.videoTracks[0].nb_samples;
+				sampleCount = info.audioTracks?.[0]?.nb_samples || 0;
+
+				const channel_count = info.audioTracks?.[0]?.audio?.channel_count;
+				const sample_rate = info.audioTracks?.[0]?.audio?.sample_rate;
 
 				let videoDescription: Uint8Array | undefined = undefined;
 				let audioDescription: Uint8Array | undefined = undefined;
@@ -129,24 +148,28 @@ export const decode = (file: File, videoEncoder: VideoEncoder, audioEncoder: Aud
 					}
 				}
 
+				// configure decoders
 				assertDefined(videoDescription, 'No video description found');
-				assertDefined(audioDescription, 'No audio description found');
-
-				// configure decoder
 				videoDecoder.configure({ codec: videoCodec, description: videoDescription });
-				audioDecoder.configure({
-					codec: audioCodec,
-					description: audioDescription,
-					numberOfChannels: channel_count,
-					sampleRate: sample_rate
-				});
+
+				if (audioDecoder) {
+					assertDefined(audioDescription, 'No audio description found');
+					audioDecoder.configure({
+						codec: audioCodec,
+						description: audioDescription,
+						numberOfChannels: channel_count,
+						sampleRate: sample_rate
+					});
+				}
 
 				// Setup mp4box file for breaking it into chunks
 				mp4boxfile.setExtractionOptions(info.videoTracks[0].id);
 				videoTracks.add(info.videoTracks[0].id);
 
-				mp4boxfile.setExtractionOptions(info.audioTracks[0].id);
-				audioTracks.add(info.audioTracks[0].id);
+				if (audioDecoder) {
+					mp4boxfile.setExtractionOptions(info.audioTracks[0].id);
+					audioTracks.add(info.audioTracks[0].id);
+				}
 
 				mp4boxfile.start();
 			} else {
@@ -154,11 +177,11 @@ export const decode = (file: File, videoEncoder: VideoEncoder, audioEncoder: Aud
 			}
 		};
 
-		mp4boxfile.onSamples = (trackId, ref, samples) => {
+		mp4boxfile.onSamples = async (trackId, ref, samples) => {
 			if (videoTracks.has(trackId)) {
 				decodedFrames += samples.length;
 			} else if (audioTracks.has(trackId)) {
-				decodedAudio += samples.length;
+				decodedSamples += samples.length;
 			}
 
 			for (let i = 0; i < samples.length; i += 1) {
@@ -174,6 +197,8 @@ export const decode = (file: File, videoEncoder: VideoEncoder, audioEncoder: Aud
 
 					videoDecoder.decode(videoChunk);
 				} else if (audioTracks.has(trackId)) {
+					assertDefined(audioDecoder, 'Audio decoder not defined');
+
 					const audioChunk = new EncodedAudioChunk({
 						type: sample.is_sync ? 'key' : 'delta',
 						timestamp: (1e6 * sample.cts) / sample.timescale, // from
@@ -184,6 +209,10 @@ export const decode = (file: File, videoEncoder: VideoEncoder, audioEncoder: Aud
 					audioDecoder.decode(audioChunk);
 				}
 			}
+
+			if (decodedFrames === frameCount && decodedSamples === sampleCount) {
+				resolve({ frameCount, sampleCount });
+			}
 		};
 
 		let offset = 0;
@@ -191,10 +220,6 @@ export const decode = (file: File, videoEncoder: VideoEncoder, audioEncoder: Aud
 		function appendBuffers({ done, value }: ReadableStreamReadResult<Uint8Array>) {
 			if (done) {
 				mp4boxfile.flush();
-				resolve({
-					frameCount: decodedFrames - 1,
-					audioCount: decodedAudio - 1
-				});
 				return;
 			}
 

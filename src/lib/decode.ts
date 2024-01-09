@@ -4,14 +4,16 @@ import { arrayMatches, assertNever } from './utils';
 
 export type FileMeta = {
 	kind: Kind;
-	audio: {
-		codec: string;
-		numberOfChannels: number;
-		sampleRate: number;
-		bitrate: number;
+	audio:
+		| {
+				codec: string;
+				numberOfChannels: number;
+				sampleRate: number;
+				bitrate: number;
 
-		sampleCount: number;
-	};
+				sampleCount: number;
+		  }
+		| undefined;
 	video: {
 		codec: string;
 		width: number;
@@ -24,7 +26,7 @@ export type FileMeta = {
 
 export type FrameAndAudioCount = {
 	frameCount: number;
-	audioCount: number;
+	sampleCount: number;
 };
 
 const tryAllGetMetadata = async (file: File): Promise<FileMeta> => {
@@ -59,7 +61,7 @@ export const decode = async (
 	kind: Kind,
 	file: File,
 	videoEncoder: VideoEncoder,
-	audioEncoder: AudioEncoder
+	audioEncoder?: AudioEncoder
 ): Promise<FrameAndAudioCount> => {
 	switch (kind) {
 		case 'mp4': {
