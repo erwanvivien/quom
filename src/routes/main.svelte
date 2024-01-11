@@ -1,6 +1,5 @@
 <script lang="ts">
-  import { decode, getMetadata } from '$lib/decode';
-  import { createEncoder } from '$lib/encode';
+  import { decodeEncode } from '$lib/codecs';
   import { assertDefined, fileNameAndExtension, getSupportedVideoConfigs } from '$lib/utils';
   import MainScreen from '../components/main_screen.svelte';
   import Progress from '../components/progress.svelte';
@@ -10,11 +9,11 @@
   let statuses: number[];
   let directoryStream: FileSystemDirectoryHandle | undefined;
 
-  let config: VideoEncoderConfig | undefined;
+  let videoConfig: VideoEncoderConfig | undefined;
 
   if (typeof window !== 'undefined') {
     // Inits the first config
-    getSupportedVideoConfigs().then((configs) => (config = configs[0]));
+    getSupportedVideoConfigs().then((configs) => (videoConfig = configs[0]));
   }
 
   const askForFolder = async (): Promise<void> => {
@@ -24,7 +23,6 @@
   const decodeOne = async (file: File, callback: (progress: number) => void) => {
     const directoryHandle = directoryStream;
     assertDefined(directoryHandle);
-    assertDefined(config);
 
     const [fileName, ext] = fileNameAndExtension(file);
 
@@ -34,14 +32,20 @@
     const fileStream = await fileHandle.createWritable();
 
     try {
-      const metadata = await getMetadata(file);
-      const Encoder = createEncoder(metadata, config, fileStream, callback);
-
-      await decode(metadata.kind, file, Encoder.videoEncoder, Encoder.audioEncoder);
-      console.log('Done decoding, flushing encoder');
-      await Encoder.close();
-
-      console.log('Done', file.name);
+      await decodeEncode(file, {
+        kind: 'mp4',
+        fileStream,
+        video: {
+          codec: 'avc',
+          width: 1920,
+          height: 1080
+        },
+        audio: {
+          codec: 'opus',
+          numberOfChannels: 2,
+          sampleRate: 48000
+        }
+      });
     } catch (e) {
       console.error(e);
     } finally {
