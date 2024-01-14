@@ -15,6 +15,9 @@ const audioConfigFromPartial = (
   return undefined;
 };
 
+/**
+ * Extracts the decoder configuration from an MP4 file.
+ */
 export const extractConfig = (file: File) =>
   new Promise<InputConfig>((resolve) => {
     const mp4boxfile = MP4Box.createFile();
@@ -117,6 +120,9 @@ export const extractConfig = (file: File) =>
     reader.read().then(appendBuffers);
   });
 
+/**
+ * Creates an MP4 muxer and returns a function that can be used to add video and audio chunks to it.
+ */
 export const createMp4Muxer = (outputConfig: OutputConfig): Muxer => {
   const mp4muxer = new Mp4Muxer({
     target: new FileSystemWritableFileStreamTarget(outputConfig.fileStream),
@@ -235,12 +241,6 @@ export const createMp4Demuxer = (
   };
 
   const decode = async (file: File) => {
-    // const wholeFile = (await file.arrayBuffer()) as MP4Box.MP4ArrayBuffer;
-    // wholeFile.fileStart = 0;
-    // mp4boxfile.appendBuffer(wholeFile);
-
-    // ==========================
-
     const reader = file.stream().getReader();
 
     let offset = 0;
@@ -261,28 +261,6 @@ export const createMp4Demuxer = (
     }
 
     throw new Error('Max reads reached');
-
-    // ==========================
-
-    // const reader = file.stream().getReader();
-    // let offset = 0;
-
-    // function appendBuffers({ done, value }: ReadableStreamReadResult<Uint8Array>) {
-    //   if (done) {
-    //     mp4boxfile.flush();
-    //     return;
-    //   }
-
-    //   // We need to cast the value to MP4ArrayBuffer and we then add the fileStart property to it
-    //   // Otherwise, we lose the ArrayBuffer type
-    //   const buf = value.buffer as MP4Box.MP4ArrayBuffer;
-    //   buf.fileStart = offset;
-    //   offset = mp4boxfile.appendBuffer(buf);
-
-    //   reader.read().then(appendBuffers);
-    // }
-
-    // reader.read().then(appendBuffers);
   };
 
   return { decode };

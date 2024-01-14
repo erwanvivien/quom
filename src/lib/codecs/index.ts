@@ -2,6 +2,11 @@ import { arrayMatches, assertDefined, assertNever, clamp } from '$lib/utils';
 import { createMp4Demuxer, createMp4Muxer, extractConfig } from './mp4';
 import type { Demuxer, InputConfig, Kind, Muxer, OutputConfig, SharedQueue } from './types';
 
+/**
+ * Checks the first 64 bytes of the file to determine the file type.
+ *
+ * Currently only supports MP4.
+ */
 const getFileKind = async (file: File): Promise<Kind | undefined> => {
   const arrayBuffer = await file.slice(0, 64).arrayBuffer();
   const array = new Uint8Array(arrayBuffer);
@@ -13,6 +18,10 @@ const getFileKind = async (file: File): Promise<Kind | undefined> => {
   return undefined;
 };
 
+/**
+ * Converts a simplified codec name to a codec name that can be used by the
+ * encoder.
+ */
 const outputVideoCodecToEncoderCodec = (codec: OutputConfig['video']['codec']): string => {
   switch (codec) {
     case 'av1':
@@ -28,6 +37,11 @@ const outputVideoCodecToEncoderCodec = (codec: OutputConfig['video']['codec']): 
   }
 };
 
+/**
+ * Create a video and audio encoder and configure them.
+ *
+ * sharedQueue will be mutated by the encoders on each call to `encode`.
+ */
 const buildAndConfigureEncoders = async (
   muxVideo: EncodedVideoChunkOutputCallback,
   muxAudio: EncodedAudioChunkOutputCallback,
@@ -87,6 +101,9 @@ type DecodeAudioConfig = {
   description: AllowSharedBufferSource;
 };
 
+/**
+ * Create a video and audio decoder and configure them.
+ */
 const buildAndConfigureDecoders = async (
   videoConfig: DecodeVideoConfig,
   audioConfig: DecodeAudioConfig | undefined
@@ -121,6 +138,13 @@ const buildAndConfigureDecoders = async (
   return { audioDecoder, videoDecoder };
 };
 
+/**
+ * This function yields the progress of the encoding process and throws an
+ * error if the encoding process takes too long.
+ *
+ * `shared` is a mutable object that is shared between the demuxer and the
+ * muxers. It counts the number of frames that have been decoded and encoded.
+ */
 async function* syncEncodeDecode(
   shared: SharedQueue['audio' | 'video']
 ): AsyncGenerator<number, number> {
@@ -147,6 +171,9 @@ async function* syncEncodeDecode(
   return 1;
 }
 
+/**
+ * Decode and encode a file.
+ */
 export const decodeEncode = async (
   file: File,
   outputConfig: OutputConfig,

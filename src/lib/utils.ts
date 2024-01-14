@@ -1,3 +1,6 @@
+/**
+ * Asserts that the given value is not `undefined` or `null`.
+ */
 export function assertDefined(
   value: unknown,
   message?: string
@@ -7,19 +10,40 @@ export function assertDefined(
   }
 }
 
+/**
+ * Asserts that the given value is never.
+ */
 export function assertNever(value: never, message?: string): never {
   throw new Error(message ?? value + ' is not never');
 }
 
+/**
+ * Asserts that the given condition is truthy.
+ */
 export function assert(condition: boolean, message?: string): asserts condition {
   if (!condition) {
     throw new Error(message ?? 'Assertion failed');
   }
 }
 
+/**
+ * Sleep for the given number of milliseconds.
+ */
 export const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/**
+ * Splits the file name and extension.
+ *
+ * @example
+ * fileNameAndExtension(new File([''], 'test.mp4')) // ['test', 'mp4']
+ * fileNameAndExtension(new File([''], 'test')) // ['test', '']
+ * fileNameAndExtension(new File([''], 'test.test.mp4')) // ['test.test', 'mp4']
+ */
 export const fileNameAndExtension = (file: File): [name: string, extension: string] => {
+  if (!file.name.includes('.')) {
+    return [file.name, ''];
+  }
+
   const split = file.name.split('.');
   const extension = split.pop() ?? '';
   const name = split.join('.');
@@ -28,7 +52,11 @@ export const fileNameAndExtension = (file: File): [name: string, extension: stri
 };
 
 /**
- * `match` is a string of hex values, e.g. "FFD8FF" and can have * wildcards
+ * Check that an array of bytes matches a pattern.
+ *
+ * @example
+ * arrayMatches(new Uint8Array([0x00, 0x01, 0x02]), [0x00, 0x01, 0x02]) // true
+ * arrayMatches(new Uint8Array([0x00, 0x01, 0x02]), [0x00, 0x01, '*']) // true
  */
 export const arrayMatches = (array: Uint8Array, match: (number | '*')[]): boolean => {
   for (let i = 0; i < match.length; i++) {
@@ -66,6 +94,13 @@ export const VideoCodecs = [
 
 export type VideoCodec = (typeof VideoCodecs)[number];
 
+/**
+ * Return a list of supported video encoder configurations for the current
+ * browser.
+ *
+ * This is a workaround for the lack of a `getSupportedConfigurations` method
+ * on the `VideoEncoder` interface.
+ */
 export const getSupportedVideoConfigs = async (): Promise<VideoEncoderConfig[]> => {
   const accelerations = ['prefer-hardware', 'prefer-software'] as const;
 
@@ -96,6 +131,13 @@ export const getSupportedVideoConfigs = async (): Promise<VideoEncoderConfig[]> 
   return configs;
 };
 
+/**
+ * Return a list of supported audio encoder configurations for the current
+ * browser.
+ *
+ * This is a workaround for the lack of a `getSupportedConfigurations` method
+ * on the `AudioEncoder` interface.
+ */
 export const getSupportedAudioConfigs = async (): Promise<AudioEncoderConfig[]> => {
   const codecs = ['opus', 'aac'];
 
@@ -115,6 +157,9 @@ export const getSupportedAudioConfigs = async (): Promise<AudioEncoderConfig[]> 
   return configs;
 };
 
+/**
+ * Clamp a value between a minimum and maximum.
+ */
 export const clamp = (value: number, min: number, max: number): number => {
   return Math.min(Math.max(value, min), max);
 };
