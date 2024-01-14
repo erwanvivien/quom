@@ -169,8 +169,6 @@ export const createMp4Demuxer = (
   // Uses mp4box for demuxing
   const mp4boxfile = MP4Box.createFile();
 
-  sharedQueue.video.decoded = -1; // I don't know why there is an off-by-one error
-
   const { videoDecoder, tracks: videoTracks } = videoConfig;
   const { audioDecoder, tracks: audioTracks } = audioConfig;
 

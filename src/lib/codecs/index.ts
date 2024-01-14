@@ -1,4 +1,4 @@
-import { arrayMatches, assertDefined, assertNever } from '$lib/utils';
+import { arrayMatches, assertDefined, assertNever, clamp } from '$lib/utils';
 import { createMp4Demuxer, createMp4Muxer, extractConfig } from './mp4';
 import type { Demuxer, InputConfig, Kind, Muxer, OutputConfig, SharedQueue } from './types';
 
@@ -121,6 +121,32 @@ const buildAndConfigureDecoders = async (
   return { audioDecoder, videoDecoder };
 };
 
+async function* syncEncodeDecode(
+  shared: SharedQueue['audio' | 'video']
+): AsyncGenerator<number, number> {
+  let tries = 0;
+  let lastEncoded = 0;
+  while (tries < 50 && shared.encoded < shared.decoded) {
+    console.info('Waiting for video to encode', shared.encoded, shared.decoded);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    if (lastEncoded === shared.encoded) {
+      tries += 1;
+    } else {
+      tries = 0;
+    }
+    lastEncoded = shared.encoded;
+    yield clamp(shared.encoded / shared.decoded, 0, 0.99);
+  }
+
+  const lastProgress = shared.encoded / shared.decoded;
+  if (tries === 200 && lastProgress < 0.98) {
+    throw new Error('Max retries reached');
+  }
+
+  return 1;
+}
+
 export const decodeEncode = async (
   file: File,
   outputConfig: OutputConfig,
@@ -150,13 +176,6 @@ export const decodeEncode = async (
       assertNever(outputConfig.kind);
   }
 
-  const { audioEncoder, videoEncoder } = await buildAndConfigureEncoders(
-    muxer.addVideoChunk,
-    muxer.addAudioChunk,
-    outputConfig,
-    sharedQueue
-  );
-
   let decodeConfig: InputConfig;
   switch (kind) {
     case 'mp4': {
@@ -166,6 +185,20 @@ export const decodeEncode = async (
     default:
       assertNever(kind);
   }
+
+  const { audioEncoder, videoEncoder } = await buildAndConfigureEncoders(
+    muxer.addVideoChunk,
+    muxer.addAudioChunk,
+    {
+      ...outputConfig,
+      audio: {
+        ...outputConfig.audio,
+        // Most often, input sample rate should be used for output sample rate.
+        sampleRate: decodeConfig.audio?.sampleRate ?? outputConfig.audio.sampleRate
+      }
+    },
+    sharedQueue
+  );
 
   assertDefined(decodeConfig.video.description);
 
@@ -212,22 +245,11 @@ export const decodeEncode = async (
   await demuxer.decode(file);
   console.info('OK');
 
-  while (sharedQueue.video.encoded < sharedQueue.video.decoded) {
-    progressCallback(sharedQueue.video.encoded / decodeConfig.video.frameCount);
-    console.info(
-      'Waiting for video to encode',
-      sharedQueue.video.encoded,
-      sharedQueue.video.decoded
-    );
-    await new Promise((resolve) => setTimeout(resolve, 100));
+  for await (const progress of syncEncodeDecode(sharedQueue.video)) {
+    progressCallback(progress);
   }
-  while (sharedQueue.audio.encoded < sharedQueue.audio.decoded) {
-    console.info(
-      'Waiting for audio to encode',
-      sharedQueue.audio.encoded,
-      sharedQueue.audio.decoded
-    );
-    await new Promise((resolve) => setTimeout(resolve, 100));
+  for await (const _progress of syncEncodeDecode(sharedQueue.audio)) {
+    // Nothing
   }
 
   progressCallback(1);

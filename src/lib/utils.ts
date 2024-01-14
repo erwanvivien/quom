@@ -114,3 +114,7 @@ export const getSupportedAudioConfigs = async (): Promise<AudioEncoderConfig[]> 
 
   return configs;
 };
+
+export const clamp = (value: number, min: number, max: number): number => {
+  return Math.min(Math.max(value, min), max);
+};
