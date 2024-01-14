@@ -61,7 +61,6 @@ export const extractConfig = (file: File) =>
       }
 
       assertDefined(videoDescription, 'No video description found');
-      assertDefined(audioDescription, 'No audio description found');
 
       const {
         track_height: height,
