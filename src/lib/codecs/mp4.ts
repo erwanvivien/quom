@@ -1,4 +1,4 @@
-import { assert, assertDefined } from '$lib/utils';
+import { VideoCodecs, assert, assertDefined, assertNever } from '$lib/utils';
 import { FileSystemWritableFileStreamTarget, Muxer as Mp4Muxer } from 'mp4-muxer';
 import * as MP4Box from 'mp4box';
 import type { Demuxer, InputConfig, Muxer, OutputConfig, SharedQueue } from './types';
@@ -120,14 +120,56 @@ export const extractConfig = (file: File) =>
     reader.read().then(appendBuffers);
   });
 
+type MuxerVideoOptions = NonNullable<ConstructorParameters<typeof Mp4Muxer>[0]['video']>;
+
+/**
+ * Converts a simplified codec name to a codec name that can be used by the
+ * encoder.
+ */
+const outputVideoCodecToEncoderCodec = (
+  codec: OutputConfig['encoderVideo']['codec']
+): MuxerVideoOptions['codec'] => {
+  type AvailableEncoders = (typeof VideoCodecs)[number];
+  assert(VideoCodecs.includes(codec as AvailableEncoders), `Invalid codec: ${codec}`);
+
+  const typedCodec = codec as AvailableEncoders;
+
+  switch (typedCodec) {
+    case 'av01.0.05M.08':
+    case 'av01.0.08M.10.0.112.09.16.09.0':
+      return 'av1';
+    case 'vp09.00.10.08':
+      return 'vp9';
+    case 'vp8':
+      return 'vp9';
+    case 'avc1.420034':
+    case 'avc1.4d0034':
+    case 'avc1.640034':
+      return 'avc';
+    case 'hev1.1.6.L93.90':
+    case 'hev1.2.6.L93.90':
+      return 'hevc';
+    default:
+      assertNever(typedCodec);
+  }
+};
+
 /**
  * Creates an MP4 muxer and returns a function that can be used to add video and audio chunks to it.
  */
 export const createMp4Muxer = (outputConfig: OutputConfig): Muxer => {
   const mp4muxer = new Mp4Muxer({
     target: new FileSystemWritableFileStreamTarget(outputConfig.fileStream),
-    video: outputConfig.video,
-    audio: outputConfig.audio,
+    video: {
+      codec: outputVideoCodecToEncoderCodec(outputConfig.encoderVideo.codec),
+      width: outputConfig.encoderVideo.width,
+      height: outputConfig.encoderVideo.height
+    },
+    audio: {
+      codec: 'opus', // 'aac' is not supported by Chrome
+      sampleRate: outputConfig.encoderAudio.sampleRate,
+      numberOfChannels: outputConfig.encoderAudio.numberOfChannels
+    },
     fastStart: false
   });
 

@@ -1,21 +1,39 @@
 <script lang="ts">
   import { browser } from '$app/environment';
   import { decodeEncode } from '$lib/codecs';
-  import { assertDefined, fileNameAndExtension, getSupportedVideoConfigs } from '$lib/utils';
+  import { type OutputConfig } from '$lib/codecs/types';
+  import {
+    assertDefined,
+    fileNameAndExtension,
+    getSupportedVideoConfigs,
+    getSupportedAudioConfigs
+  } from '$lib/utils';
   import MainScreen from '../components/main_screen.svelte';
   import Progress from '../components/progress.svelte';
   import WhyQuom from '../components/why_quom.svelte';
   import Folder from '../components/svgs/folder.svelte';
+  import {
+    completeVideoConfig,
+    completeAudioConfig,
+    getDefaultVideoConfig,
+    getDefaultAudioConfig,
+    type IndividualAudioConfig,
+    type IndividualVideoConfig
+  } from '$lib/config';
 
   let files: FileList;
   let statuses: number[];
+  let videoConfigs: IndividualVideoConfig[];
+  let audioConfigs: IndividualAudioConfig[];
   let directoryStream: FileSystemDirectoryHandle | undefined;
 
-  let videoConfig: VideoEncoderConfig | undefined;
+  let globalVideoConfig: VideoEncoderConfig | undefined;
+  let globalAudioConfig: AudioEncoderConfig | undefined;
 
   if (browser) {
     // Inits the first config
-    getSupportedVideoConfigs().then((configs) => (videoConfig = configs[0]));
+    getSupportedVideoConfigs().then((configs) => (globalVideoConfig = configs[0]));
+    getSupportedAudioConfigs().then((configs) => (globalAudioConfig = configs[0]));
   }
 
   const askForFolder = async (): Promise<void> => {
@@ -30,7 +48,7 @@
     }
   };
 
-  const decodeOne = async (file: File, callback: (progress: number) => void) => {
+  const decodeOne = async (file: File, index: number, callback: (progress: number) => void) => {
     const directoryHandle = directoryStream;
     assertDefined(directoryHandle);
 
@@ -41,13 +59,16 @@
     });
     const fileStream = await fileHandle.createWritable();
 
+    assertDefined(globalVideoConfig);
+    assertDefined(globalAudioConfig);
+
     try {
-      const config = {
+      const config: OutputConfig = {
         kind: 'mp4',
         fileStream,
-        video: { codec: 'avc', width: 1920, height: 1080 },
-        audio: { codec: 'opus', numberOfChannels: 2, sampleRate: 48000 }
-      } as const;
+        encoderVideo: completeVideoConfig(videoConfigs[index], globalVideoConfig),
+        encoderAudio: completeAudioConfig(audioConfigs[index], globalAudioConfig)
+      };
 
       await decodeEncode(file, config, callback);
     } catch (e) {
@@ -59,6 +80,12 @@
 
   $: if (files && files.length !== 0) {
     statuses = Array(files.length).fill(0);
+    videoConfigs = Array(files.length)
+      .fill(undefined)
+      .map(() => getDefaultVideoConfig());
+    audioConfigs = Array(files.length)
+      .fill(undefined)
+      .map(() => getDefaultAudioConfig());
   }
 
   $: if (files && files.length !== 0 && directoryStream) {
@@ -68,7 +95,7 @@
       const callback = (progress: number) => {
         statuses[index] = progress;
       };
-      promise = promise.then(() => decodeOne(files[i], callback));
+      promise = promise.then(() => decodeOne(files[i], i, callback));
     }
 
     promise.then(() => {

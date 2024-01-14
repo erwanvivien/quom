@@ -19,25 +19,6 @@ const getFileKind = async (file: File): Promise<Kind | undefined> => {
 };
 
 /**
- * Converts a simplified codec name to a codec name that can be used by the
- * encoder.
- */
-const outputVideoCodecToEncoderCodec = (codec: OutputConfig['video']['codec']): string => {
-  switch (codec) {
-    case 'av1':
-      return 'av01.0.05M.08';
-    case 'avc':
-      return 'avc1.420034';
-    case 'hevc':
-      return 'hev1.2.4.L120.90';
-    case 'vp9':
-      return 'vp09.00.10.08';
-    default:
-      assertNever(codec);
-  }
-};
-
-/**
  * Create a video and audio encoder and configure them.
  *
  * sharedQueue will be mutated by the encoders on each call to `encode`.
@@ -71,16 +52,16 @@ const buildAndConfigureEncoders = async (
 
   // Configure and reset if not supported. More sophisticated fallback recommended.
   videoEncoder.configure({
-    codec: outputVideoCodecToEncoderCodec(config.video.codec),
-    width: config.video.width,
-    height: config.video.height,
+    codec: config.encoderVideo.codec,
+    width: config.encoderVideo.width,
+    height: config.encoderVideo.height,
     bitrate: 1_000_000,
     framerate: 30
   });
   audioEncoder.configure({
-    codec: config.audio.codec,
-    numberOfChannels: config.audio.numberOfChannels,
-    sampleRate: config.audio.sampleRate,
+    codec: 'opus', // 'aac' is not supported by Chrome
+    numberOfChannels: config.encoderAudio.numberOfChannels,
+    sampleRate: config.encoderAudio.sampleRate,
     bitrate: 128000
   });
 
@@ -218,10 +199,10 @@ export const decodeEncode = async (
     muxer.addAudioChunk,
     {
       ...outputConfig,
-      audio: {
-        ...outputConfig.audio,
+      encoderAudio: {
+        ...outputConfig.encoderAudio,
         // Most often, input sample rate should be used for output sample rate.
-        sampleRate: decodeConfig.audio?.sampleRate ?? outputConfig.audio.sampleRate
+        sampleRate: decodeConfig.audio?.sampleRate ?? outputConfig.encoderAudio.sampleRate
       }
     },
     sharedQueue

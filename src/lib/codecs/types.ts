@@ -8,16 +8,8 @@ export type InputConfig = {
 
 export type OutputConfig = {
   kind: 'mp4';
-  video: {
-    codec: 'avc' | 'hevc' | 'vp9' | 'av1'; // Supported by mp4-muxer
-    width: number;
-    height: number;
-  };
-  audio: {
-    codec: 'aac' | 'opus';
-    numberOfChannels: number;
-    sampleRate: number;
-  };
+  encoderVideo: VideoEncoderConfig;
+  encoderAudio: AudioEncoderConfig;
   fileStream: FileSystemWritableFileStream;
 };
 
