@@ -4,6 +4,7 @@
   import { assertDefined, fileNameAndExtension, getSupportedVideoConfigs } from '$lib/utils';
   import MainScreen from '../components/main_screen.svelte';
   import Progress from '../components/progress.svelte';
+  import WhyQuom from '../components/why_quom.svelte';
   import Folder from '../components/svgs/folder.svelte';
 
   let files: FileList;
@@ -87,15 +88,17 @@
         <p>Select save folder</p>
         <Folder />
       </button>
+    {:else}
+      {#each files as file, index}
+        <Progress fileName={file.name} progress={statuses[index]} />
+      {/each}
     {/if}
-
-    {#each files as file, index}
-      <Progress fileName={file.name} progress={statuses[index]} />
-    {/each}
   </div>
 {:else}
   <MainScreen bind:files />
 {/if}
+
+<WhyQuom />
 
 <style>
   h1 {
@@ -123,8 +126,11 @@
     gap: 8px;
     padding: 15px 32px;
 
-    background-color: #04aa6d; /* Green */
+    background-color: #d4d3ff;
+    box-shadow: rgba(0, 0, 0, 0.16) 0px 1px 4px;
+
     border: none;
+    border-radius: 16px;
 
     font-family: Inter;
     font-size: 16px;

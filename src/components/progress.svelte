@@ -21,8 +21,9 @@
     max-width: 600px;
     height: 3rem;
 
-    background-color: #89a1ff;
-    border-radius: 1.5rem;
+    background-color: #d4d3ff;
+    box-shadow: rgba(0, 0, 0, 0.16) 0px 1px 4px;
+    border-radius: 8px;
 
     font-family: 'Courier New', Courier, monospace;
     font-size: large;

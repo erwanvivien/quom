@@ -47,7 +47,7 @@
     align-items: center;
     justify-content: center;
 
-    border: 2px dashed #ccc;
+    border: 6px dashed #ebf3ff;
     border-radius: 2rem;
 
     text-align: center;
