@@ -134,7 +134,11 @@ const buildAndConfigureDecoders = async (
   return { audioDecoder, videoDecoder };
 };
 
-export const decodeEncode = async (file: File, outputConfig: OutputConfig) => {
+export const decodeEncode = async (
+  file: File,
+  outputConfig: OutputConfig,
+  progressCallback: (progress: number) => void
+) => {
   const sharedQueue = {
     video: {
       encoded: 0,
@@ -224,6 +228,7 @@ export const decodeEncode = async (file: File, outputConfig: OutputConfig) => {
   console.log('OK');
 
   while (sharedQueue.video.encoded < sharedQueue.video.decoded) {
+    progressCallback(sharedQueue.video.encoded / decodeConfig.video.frameCount);
     console.info(
       'Waiting for video to encode',
       sharedQueue.video.encoded,
@@ -240,7 +245,7 @@ export const decodeEncode = async (file: File, outputConfig: OutputConfig) => {
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
 
-  console.log(JSON.stringify(sharedQueue, null, 2));
+  progressCallback(1);
 
   console.log('Waiting for decoders to flush');
   await Promise.all([videoDecoder.flush(), audioDecoder?.flush()]);

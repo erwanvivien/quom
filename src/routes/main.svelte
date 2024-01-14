@@ -32,20 +32,14 @@
     const fileStream = await fileHandle.createWritable();
 
     try {
-      await decodeEncode(file, {
+      const config = {
         kind: 'mp4',
         fileStream,
-        video: {
-          codec: 'avc',
-          width: 1920,
-          height: 1080
-        },
-        audio: {
-          codec: 'opus',
-          numberOfChannels: 2,
-          sampleRate: 48000
-        }
-      });
+        video: { codec: 'avc', width: 1920, height: 1080 },
+        audio: { codec: 'opus', numberOfChannels: 2, sampleRate: 48000 }
+      } as const;
+
+      await decodeEncode(file, config, callback);
     } catch (e) {
       console.error(e);
     } finally {
