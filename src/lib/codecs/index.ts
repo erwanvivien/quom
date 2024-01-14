@@ -63,12 +63,6 @@ const buildAndConfigureEncoders = async (
     bitrate: 1_000_000,
     framerate: 30
   });
-  console.log({
-    codec: config.audio.codec,
-    numberOfChannels: config.audio.numberOfChannels,
-    sampleRate: config.audio.sampleRate,
-    bitrate: 128000
-  });
   audioEncoder.configure({
     codec: config.audio.codec,
     numberOfChannels: config.audio.numberOfChannels,
@@ -106,14 +100,10 @@ const buildAndConfigureDecoders = async (
       videoConfig.videoEncoder.encode(videoFrame);
       videoFrame.close();
     },
-    error: (error) => {
-      console.error("videoDecoder's error", error);
-      throw error;
-    }
+    error: console.error
   });
 
   // Configure and reset if not supported. More sophisticated fallback recommended.
-  console.log(videoConfig);
   videoDecoder.configure(videoConfig);
 
   let audioDecoder: AudioDecoder | undefined;
@@ -123,10 +113,7 @@ const buildAndConfigureDecoders = async (
         audioConfig.audioEncoder.encode(audioData);
         audioData.close();
       },
-      error: (error) => {
-        console.error("audioDecoder's error", error);
-        throw error;
-      }
+      error: console.error
     });
     audioDecoder.configure(audioConfig);
   }
@@ -162,8 +149,6 @@ export const decodeEncode = async (
     default:
       assertNever(outputConfig.kind);
   }
-
-  console.log(outputConfig);
 
   const { audioEncoder, videoEncoder } = await buildAndConfigureEncoders(
     muxer.addVideoChunk,
@@ -223,9 +208,9 @@ export const decodeEncode = async (
       assertNever(kind);
   }
 
-  console.log("Waiting for demuxer's promise to resolve");
+  console.info("Waiting for demuxer's promise to resolve");
   await demuxer.decode(file);
-  console.log('OK');
+  console.info('OK');
 
   while (sharedQueue.video.encoded < sharedQueue.video.decoded) {
     progressCallback(sharedQueue.video.encoded / decodeConfig.video.frameCount);
@@ -247,14 +232,14 @@ export const decodeEncode = async (
 
   progressCallback(1);
 
-  console.log('Waiting for decoders to flush');
+  console.info('Waiting for decoders to flush');
   await Promise.all([videoDecoder.flush(), audioDecoder?.flush()]);
-  console.log('OK');
+  console.info('OK');
 
-  console.log('Waiting for encoders to flush');
+  console.info('Waiting for encoders to flush');
   await Promise.all([videoEncoder.flush(), audioEncoder.flush()]);
-  console.log('OK');
-  console.log('Closing muxer');
+  console.info('OK');
+  console.info('Closing muxer');
   muxer.finalize();
-  console.log('OK');
+  console.info('OK');
 };

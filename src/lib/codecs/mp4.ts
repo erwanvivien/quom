@@ -231,7 +231,6 @@ export const createMp4Demuxer = (
           throw new Error('Max retries reached');
         }
 
-        console.log('decoded audio chunk');
         sharedQueue.audio.decoded += 1;
         audioDecoder.decode(audioChunk);
       }

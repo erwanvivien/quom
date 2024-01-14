@@ -63,7 +63,7 @@
     }
 
     promise.then(() => {
-      console.log('Done all files');
+      console.info('Done all files');
     });
   }
 </script>
