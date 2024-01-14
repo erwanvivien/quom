@@ -1,10 +1,11 @@
 <script lang="ts">
   import Main from './main.svelte';
+  import { browser } from '$app/environment';
 
   let supported = true;
 
   // Ensure to check for browser support for Web Codecs
-  if (typeof window !== 'undefined' && (!window.VideoEncoder || !window.VideoDecoder)) {
+  if (browser && (!window.VideoEncoder || !window.VideoDecoder)) {
     console.error('Web Codecs API is not supported in this browser.');
     supported = false;
   }

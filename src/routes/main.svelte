@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { browser } from '$app/environment';
   import { decodeEncode } from '$lib/codecs';
   import { assertDefined, fileNameAndExtension, getSupportedVideoConfigs } from '$lib/utils';
   import MainScreen from '../components/main_screen.svelte';
@@ -11,7 +12,7 @@
 
   let videoConfig: VideoEncoderConfig | undefined;
 
-  if (typeof window !== 'undefined') {
+  if (browser) {
     // Inits the first config
     getSupportedVideoConfigs().then((configs) => (videoConfig = configs[0]));
   }
