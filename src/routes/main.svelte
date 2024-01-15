@@ -1,7 +1,7 @@
 <script lang="ts">
   import { browser } from '$app/environment';
-  import { decodeEncode } from '$lib/codecs';
-  import { type OutputConfig } from '$lib/codecs/types';
+  import { decodeEncode, getFileKind } from '$lib/codecs';
+  import { type OutputConfig, type Kind } from '$lib/codecs/types';
   import {
     assertDefined,
     fileNameAndExtension,
@@ -22,10 +22,16 @@
   } from '$lib/config';
 
   let files: FileList;
-  let statuses: number[];
-  let videoConfigs: IndividualVideoConfig[];
-  let audioConfigs: IndividualAudioConfig[];
+  let filesConfigs: {
+    progress: number;
+    fileType: Kind | undefined;
+    videoConfig: IndividualVideoConfig;
+    audioConfig: IndividualAudioConfig;
+    file: File;
+  }[];
   let directoryStream: FileSystemDirectoryHandle | undefined;
+
+  let decodingPromise: Promise<void> | undefined = undefined;
 
   let globalVideoConfig: VideoEncoderConfig | undefined;
   let globalAudioConfig: AudioEncoderConfig | undefined;
@@ -66,8 +72,8 @@
       const config: OutputConfig = {
         kind: 'mp4',
         fileStream,
-        encoderVideo: completeVideoConfig(videoConfigs[index], globalVideoConfig),
-        encoderAudio: completeAudioConfig(audioConfigs[index], globalAudioConfig)
+        encoderVideo: completeVideoConfig(filesConfigs[index].videoConfig, globalVideoConfig),
+        encoderAudio: completeAudioConfig(filesConfigs[index].audioConfig, globalAudioConfig)
       };
 
       await decodeEncode(file, config, callback);
@@ -79,26 +85,42 @@
   };
 
   $: if (files && files.length !== 0) {
-    statuses = Array(files.length).fill(0);
-    videoConfigs = Array(files.length)
+    const tmp = Array(files.length)
       .fill(undefined)
-      .map(() => getDefaultVideoConfig());
-    audioConfigs = Array(files.length)
-      .fill(undefined)
-      .map(() => getDefaultAudioConfig());
+      .map(async (_, index) => ({
+        progress: 0,
+        audioConfig: getDefaultAudioConfig(),
+        videoConfig: getDefaultVideoConfig(),
+        fileType: await getFileKind(files[index]),
+        file: files[index]
+      }));
+
+    Promise.all(tmp).then((configs) => (filesConfigs = configs));
   }
 
-  $: if (files && files.length !== 0 && directoryStream) {
-    let promise = Promise.resolve();
+  $: if (
+    files &&
+    files.length !== 0 &&
+    directoryStream &&
+    filesConfigs.length === files.length &&
+    !decodingPromise
+  ) {
+    decodingPromise = Promise.resolve();
     for (let i = 0; i < files.length; i++) {
+      console.log(filesConfigs[i].fileType);
+      if (!filesConfigs[i].fileType) {
+        continue;
+      }
+
       const index = i;
-      const callback = (progress: number) => {
-        statuses[index] = progress;
-      };
-      promise = promise.then(() => decodeOne(files[i], i, callback));
+      console.log(filesConfigs[index].file.name);
+      const callback = (progress: number) => (filesConfigs[index].progress = progress);
+      decodingPromise = decodingPromise.then(() =>
+        decodeOne(filesConfigs[i].file, index, callback)
+      );
     }
 
-    promise.then(() => {
+    decodingPromise.then(() => {
       console.info('Done all files');
     });
   }
@@ -116,8 +138,12 @@
         <Folder />
       </button>
     {:else}
-      {#each files as file, index}
-        <Progress fileName={file.name} progress={statuses[index]} />
+      {#each filesConfigs as config, index (config.file.name + index)}
+        <Progress
+          fileName={config.file.name}
+          progress={config.progress}
+          valid={config.fileType !== undefined}
+        />
       {/each}
     {/if}
   </div>

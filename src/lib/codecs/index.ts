@@ -7,7 +7,7 @@ import type { Demuxer, InputConfig, Kind, Muxer, OutputConfig, SharedQueue } fro
  *
  * Currently only supports MP4.
  */
-const getFileKind = async (file: File): Promise<Kind | undefined> => {
+export const getFileKind = async (file: File): Promise<Kind | undefined> => {
   const arrayBuffer = await file.slice(0, 64).arrayBuffer();
   const array = new Uint8Array(arrayBuffer);
 
