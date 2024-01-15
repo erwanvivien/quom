@@ -138,6 +138,9 @@
         <Folder />
       </button>
     {:else}
+      {#await decodingPromise then}
+        <p class="done">All files are saved to <b>{directoryStream.name}</b> folder</p>
+      {/await}
       {#each filesConfigs as config, index (config.file.name + index)}
         <Progress
           fileName={config.file.name}
@@ -197,5 +200,10 @@
     justify-content: center;
 
     margin-block: 3rem;
+  }
+
+  .done {
+    font-family: Inter;
+    font-size: 1.2rem;
   }
 </style>
