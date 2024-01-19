@@ -1,4 +1,4 @@
-import { VideoCodecs, assert, assertDefined, assertNever } from '$lib/utils';
+import { VideoCodecs, assert, assertDefined } from '$lib/utils';
 import { FileSystemWritableFileStreamTarget, Muxer as Mp4Muxer } from 'mp4-muxer';
 import * as MP4Box from 'mp4box';
 import type { Demuxer, InputConfig, Muxer, OutputConfig, SharedQueue } from './types';
@@ -129,29 +129,19 @@ type MuxerVideoOptions = NonNullable<ConstructorParameters<typeof Mp4Muxer>[0]['
 const outputVideoCodecToEncoderCodec = (
   codec: OutputConfig['encoderVideo']['codec']
 ): MuxerVideoOptions['codec'] => {
-  type AvailableEncoders = (typeof VideoCodecs)[number];
-  assert(VideoCodecs.includes(codec as AvailableEncoders), `Invalid codec: ${codec}`);
+  assert(codec in VideoCodecs, `Invalid codec: ${codec}`);
 
-  const typedCodec = codec as AvailableEncoders;
-
-  switch (typedCodec) {
-    case 'av01.0.05M.08':
-    case 'av01.0.08M.10.0.112.09.16.09.0':
-      return 'av1';
-    case 'vp09.00.10.08':
-      return 'vp9';
-    case 'vp8':
-      return 'vp9';
-    case 'avc1.420034':
-    case 'avc1.4d0034':
-    case 'avc1.640034':
-      return 'avc';
-    case 'hev1.1.6.L93.90':
-    case 'hev1.2.6.L93.90':
-      return 'hevc';
-    default:
-      assertNever(typedCodec);
+  if (codec.startsWith('hev1')) {
+    return 'hevc';
+  } else if (codec.startsWith('avc1')) {
+    return 'avc';
+  } else if (codec.startsWith('vp09')) {
+    return 'vp9';
+  } else if (codec.startsWith('av01')) {
+    return 'av1';
   }
+
+  throw new Error(`Invalid codec: ${codec}`);
 };
 
 /**

@@ -35,6 +35,7 @@
 	"dependencies": {
 		"@types/dom-webcodecs": "^0.1.11",
 		"mp4-muxer": "^3.0.3",
-		"mp4box": "^0.5.2"
+		"mp4box": "^0.5.2",
+		"zod": "^3.22.4"
 	}
 }

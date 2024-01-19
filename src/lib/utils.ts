@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 /**
  * Asserts that the given value is not `undefined` or `null`.
  */
@@ -75,24 +77,38 @@ export const arrayMatches = (array: Uint8Array, match: (number | '*')[]): boolea
   return true;
 };
 
-export const VideoCodecs = [
-  // h264
-  'avc1.420034',
-  'avc1.4d0034',
-  'avc1.640034',
-  // h265
-  'hev1.1.6.L93.90',
-  'hev1.2.6.L93.90',
-  // vp8
-  'vp8',
-  // vp9
-  'vp09.00.10.08',
-  // av1
-  'av01.0.05M.08',
-  'av01.0.08M.10.0.112.09.16.09.0'
-] as const;
+const CodecFormat = z.record(z.object({ description: z.string() }));
 
-export type VideoCodec = (typeof VideoCodecs)[number];
+const fetch = async (url: RequestInfo): Promise<Response> => {
+  if (typeof window === 'undefined') {
+    return Promise.resolve(new Response('{}'));
+  }
+
+  return await window.fetch(url);
+};
+
+const _genericVideo = await fetch('/codecs/video/index.json');
+const GenericVideo = CodecFormat.parse(await _genericVideo.json());
+const _vp9 = await fetch('/codecs/video/vp9.json');
+const Vp9Codecs = CodecFormat.parse(await _vp9.json());
+const _av1 = await fetch('/codecs/video/av1.json');
+const Av1Codecs = CodecFormat.parse(await _av1.json());
+const _avc = await fetch('/codecs/video/avc.json');
+const AvcCodecs = CodecFormat.parse(await _avc.json());
+const _hevc = await fetch('/codecs/video/hevc.json');
+const HevcCodecs = CodecFormat.parse(await _hevc.json());
+const Vp8Codecs = { vp8: { description: 'VP8' } };
+
+export const VideoCodecs: Record<string, { description: string }> = {
+  ...GenericVideo,
+  ...Vp8Codecs,
+  ...Vp9Codecs,
+  ...Av1Codecs,
+  ...AvcCodecs,
+  ...HevcCodecs
+};
+
+let supportedVideoConfigs: VideoEncoderConfig[] | undefined;
 
 /**
  * Return a list of supported video encoder configurations for the current
@@ -102,11 +118,15 @@ export type VideoCodec = (typeof VideoCodecs)[number];
  * on the `VideoEncoder` interface.
  */
 export const getSupportedVideoConfigs = async (): Promise<VideoEncoderConfig[]> => {
+  if (supportedVideoConfigs) {
+    return supportedVideoConfigs;
+  }
+
   const accelerations = ['prefer-hardware', 'prefer-software'] as const;
 
   const configs: VideoEncoderConfig[] = [];
   for (const acceleration of accelerations) {
-    for (const codec of VideoCodecs) {
+    for (const codec in VideoCodecs) {
       const config: VideoEncoderConfig = {
         codec,
         hardwareAcceleration: acceleration,
@@ -122,14 +142,31 @@ export const getSupportedVideoConfigs = async (): Promise<VideoEncoderConfig[]> 
         config.hevc = { format: 'annexb' };
       }
 
-      if (await VideoEncoder.isConfigSupported(config)) {
+      const { supported } = await VideoEncoder.isConfigSupported(config);
+      if (supported) {
         configs.push(config);
       }
     }
   }
 
+  supportedVideoConfigs = configs;
   return configs;
 };
+
+const _genericAudio = await fetch('/codecs/audio/index.json');
+const GenericAudio = CodecFormat.parse(await _genericAudio.json());
+const _mp3 = await fetch('/codecs/audio/mp3.json');
+const Mp3Codecs = CodecFormat.parse(await _mp3.json());
+const _mp4a = await fetch('/codecs/audio/mp4a.json');
+const Mp4aCodecs = CodecFormat.parse(await _mp4a.json());
+
+export const AudioCodecs: Record<string, { description: string }> = {
+  ...GenericAudio,
+  ...Mp3Codecs,
+  ...Mp4aCodecs
+};
+
+let supportedAudioConfigs: AudioEncoderConfig[] | undefined;
 
 /**
  * Return a list of supported audio encoder configurations for the current
@@ -139,21 +176,25 @@ export const getSupportedVideoConfigs = async (): Promise<VideoEncoderConfig[]> 
  * on the `AudioEncoder` interface.
  */
 export const getSupportedAudioConfigs = async (): Promise<AudioEncoderConfig[]> => {
-  const codecs = ['opus', 'aac'];
+  if (supportedAudioConfigs) {
+    return supportedAudioConfigs;
+  }
 
   const configs: AudioEncoderConfig[] = [];
-  for (const codec of codecs) {
+  for (const codec in AudioCodecs) {
     const config = {
       codec,
       numberOfChannels: 2,
       sampleRate: 48000
     };
 
-    if (await AudioEncoder.isConfigSupported(config)) {
+    const { supported } = await AudioEncoder.isConfigSupported(config);
+    if (supported) {
       configs.push(config);
     }
   }
 
+  supportedAudioConfigs = configs;
   return configs;
 };
 
