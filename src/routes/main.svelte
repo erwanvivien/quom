@@ -28,6 +28,6 @@
     display: flex;
     justify-content: center;
 
-    margin-block: 3rem;
+    margin-block: 2rem 1rem;
   }
 </style>

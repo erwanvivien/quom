@@ -5,7 +5,8 @@
     videos at once.
   </p>
   <p>Then click on the button to select the folder where you want to save the converted videos.</p>
-  <p></p>
+
+  <div style="height: 12px" />
 
   <h3>Why Quom?</h3>
   <p>
@@ -24,7 +25,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    margin-block: 3rem;
+    margin-block: 2rem;
   }
 
   .container > * {
