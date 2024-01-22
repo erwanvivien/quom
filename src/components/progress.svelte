@@ -1,7 +1,7 @@
 <script lang="ts">
   export let fileName: string;
   export let progress: number;
-  export let valid: boolean;
+  export let status: 'valid' | 'invalid' | 'waiting';
 
   import { fileNameAndExtension } from '$lib/utils';
 
@@ -11,13 +11,15 @@
 
 <div class="progressbar" style="">
   <div class="tooltip">
-    {#if valid}
+    {#if status === 'valid'}
       <Check class="svg" />
-    {:else}
+    {:else if status === 'invalid'}
       <Cross class="svg" />
+    {:else}
+      <svg></svg>
     {/if}
 
-    {#if !valid}
+    {#if status === 'invalid'}
       <span class="tooltip-text">
         Invalid file format {fileNameAndExtension(new File([''], fileName))[1]}
       </span>
