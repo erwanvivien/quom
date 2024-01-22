@@ -44,11 +44,12 @@
   }
 
   const askForFolder = async (): Promise<void> => {
-    directoryStream = await window.showDirectoryPicker({ id: 'quom' });
+    const tmpFolder = await window.showDirectoryPicker({ id: 'quom' });
     try {
       const FILE_NAME = '__quom_non_existing_file__.tmp';
-      await directoryStream.getFileHandle(FILE_NAME, { create: true });
-      await directoryStream.removeEntry(FILE_NAME);
+      await tmpFolder.getFileHandle(FILE_NAME, { create: true });
+      await tmpFolder.removeEntry(FILE_NAME);
+      directoryStream = tmpFolder;
     } catch (e) {
       directoryStream = undefined;
       throw e;
