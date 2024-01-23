@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { browser } from '$app/environment';
   import { decodeEncode, getFileKind } from '$lib/codecs';
   import type { Kind, OutputConfig } from '$lib/codecs/types';
   import {
@@ -10,13 +9,7 @@
     type IndividualAudioConfig,
     type IndividualVideoConfig
   } from '$lib/config';
-  import {
-    assertDefined,
-    classes,
-    fileNameAndExtension,
-    getSupportedAudioConfigs,
-    getSupportedVideoConfigs
-  } from '$lib/utils';
+  import { assertDefined, classes, fileNameAndExtension } from '$lib/utils';
   import Progress from './progress.svelte';
   import Folder from './svgs/folder.svelte';
   import Play from './svgs/play.svelte';
@@ -26,8 +19,8 @@
   let directoryStream: FileSystemDirectoryHandle | undefined;
   let decodingState: 'decoding' | 'done' | 'ready' = 'ready';
 
-  let globalVideoConfig: VideoEncoderConfig | undefined;
-  let globalAudioConfig: AudioEncoderConfig | undefined;
+  export let globalVideoConfig: VideoEncoderConfig;
+  export let globalAudioConfig: AudioEncoderConfig;
 
   let filesConfigs: {
     progress: number;
@@ -36,12 +29,6 @@
     audioConfig: IndividualAudioConfig;
     file: File;
   }[] = [];
-
-  if (browser) {
-    // Inits the first config
-    getSupportedVideoConfigs().then((configs) => (globalVideoConfig = configs[0]));
-    getSupportedAudioConfigs().then((configs) => (globalAudioConfig = configs[0]));
-  }
 
   const askForFolder = async (): Promise<void> => {
     const tmpFolder = await window.showDirectoryPicker({ id: 'quom' });
@@ -66,9 +53,6 @@
       create: true
     });
     const fileStream = await fileHandle.createWritable();
-
-    assertDefined(globalVideoConfig);
-    assertDefined(globalAudioConfig);
 
     try {
       const config: OutputConfig = {

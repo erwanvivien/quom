@@ -71,3 +71,6 @@ export const completeAudioConfig = (
     sampleRate: globalOrValue(globalConfig.sampleRate, config.sampleRate)
   };
 };
+
+export const VALID_CONTAINERS = ['mp4'] as const;
+export type Container = (typeof VALID_CONTAINERS)[number];
