@@ -18,7 +18,7 @@
 {#if files && files.length !== 0}
   <div class="container">
     <Files {files} {globalVideoConfig} {globalAudioConfig} />
-    <Config bind:globalVideoConfig bind:globalAudioConfig />
+    <Config bind:container bind:globalVideoConfig bind:globalAudioConfig />
   </div>
 {:else}
   <MainScreen bind:files />

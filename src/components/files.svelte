@@ -23,7 +23,7 @@
   export let globalAudioConfig: AudioEncoderConfig;
 
   let filesConfigs: {
-    progress: number;
+    progress: number | Error;
     fileType: Kind | undefined;
     videoConfig: IndividualVideoConfig;
     audioConfig: IndividualAudioConfig;
@@ -43,7 +43,11 @@
     }
   };
 
-  const decodeOne = async (file: File, index: number, callback: (progress: number) => void) => {
+  const decodeOne = async (
+    file: File,
+    index: number,
+    callback: (progress: number | Error) => void
+  ) => {
     const directoryHandle = directoryStream;
     assertDefined(directoryHandle);
 
@@ -65,6 +69,11 @@
       await decodeEncode(file, config, callback);
     } catch (e) {
       console.error(e);
+      if (e instanceof Error) {
+        callback(e);
+      } else {
+        callback(new Error('Unknown error'));
+      }
     } finally {
       fileStream.close();
     }
@@ -99,7 +108,7 @@
 
       const index = i;
       console.log(filesConfigs[index].file.name);
-      const callback = (progress: number) => (filesConfigs[index].progress = progress);
+      const callback = (progress: number | Error) => (filesConfigs[index].progress = progress);
       await decodeOne(filesConfigs[i].file, index, callback);
     }
 
@@ -129,8 +138,7 @@
   {#each filesConfigs as config, index (config.file.name + index)}
     <Progress
       fileName={config.file.name}
-      progress={config.progress}
-      status={config.fileType === undefined ? 'invalid' : 'valid'}
+      progress={config.fileType ? config.progress : new DOMException('Unsupported file type')}
     />
   {/each}
 </div>

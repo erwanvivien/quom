@@ -57,6 +57,12 @@
     </select>
   </div>
 
+  <div class="dimension-container">
+    <input type="number" bind:value={globalVideoConfig.width} />
+    <span> × </span>
+    <input type="number" bind:value={globalVideoConfig.height} />
+  </div>
+
   <div>
     <button class={classes(panel === 'video' && 'active')} on:click={() => (panel = 'video')}>
       Video
@@ -110,7 +116,15 @@
     font-weight: bold;
   }
 
-  select {
+  .dimension-container {
+    display: flex;
+    gap: 8px;
+
+    align-items: center;
+  }
+
+  select,
+  input {
     width: 100%;
     padding: 8px 16px;
 

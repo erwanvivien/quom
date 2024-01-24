@@ -1,34 +1,24 @@
 <script lang="ts">
   export let fileName: string;
-  export let progress: number;
-  export let status: 'valid' | 'invalid' | 'waiting';
+  export let progress: number | Error;
 
-  import { fileNameAndExtension } from '$lib/utils';
-
-  import Check from '../components/svgs/check.svelte';
-  import Cross from '../components/svgs/cross.svelte';
+  import Information from './svgs/information.svelte';
 </script>
 
 <div class="progressbar" style="">
-  <div class="tooltip">
-    {#if status === 'valid'}
-      <Check class="svg" />
-    {:else if status === 'invalid'}
-      <Cross class="svg" />
-    {:else}
-      <svg></svg>
-    {/if}
-
-    {#if status === 'invalid'}
-      <span class="tooltip-text">
-        Invalid file format {fileNameAndExtension(new File([''], fileName))[1]}
-      </span>
-    {/if}
-  </div>
-
   <p style="text-overflow: ellipsis; overflow: hidden; text-wrap: nowrap;">{fileName}</p>
   <div style="flex: 1" />
-  <p>{Math.round(progress * 100)}%</p>
+  {#if typeof progress === 'number'}
+    <p>{Math.round(progress * 100)}%</p>
+  {:else if progress instanceof Error}
+    <div class="tooltip">
+      Error <Information class="svg" />
+
+      <span class="tooltip-text">
+        {progress.message}
+      </span>
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -54,12 +44,17 @@
   }
 
   .tooltip {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+
     position: relative;
   }
 
   .tooltip .tooltip-text {
     visibility: hidden;
-    width: 240px;
+    max-width: 480px;
+    width: max-content;
     background-color: #d4d3ff;
     border: 1px solid #00000040;
     text-align: center;
@@ -68,9 +63,10 @@
 
     position: absolute;
     z-index: 1;
-    top: -200%;
+
+    bottom: 2rem;
+    transform: translateX(-50%);
     left: 50%;
-    margin-left: -120px;
   }
 
   .tooltip:hover .tooltip-text {

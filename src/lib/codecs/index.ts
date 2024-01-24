@@ -27,28 +27,49 @@ const buildAndConfigureEncoders = async (
   muxVideo: EncodedVideoChunkOutputCallback,
   muxAudio: EncodedAudioChunkOutputCallback,
   config: OutputConfig,
-  sharedQueue: SharedQueue
+  sharedQueue: SharedQueue,
+  resetAndClose: (encoder: VideoEncoder | AudioEncoder | undefined, error: DOMException) => void
 ): Promise<{
   audioEncoder: AudioEncoder;
   videoEncoder: VideoEncoder;
 }> => {
+  const store: Partial<{
+    video: VideoEncoder;
+    audio: AudioEncoder;
+  }> = {};
+
+  const closed = () => store.video?.state === 'closed' || store.audio?.state === 'closed';
+
   // Build encoders.
   const videoEncoder = new VideoEncoder({
     output: (chunk, metadata) => {
+      if (closed()) {
+        videoEncoder.close();
+        return;
+      }
+
       console.info('Encoded video chunk');
       sharedQueue.video.encoded += 1;
       muxVideo(chunk, metadata);
     },
-    error: console.error
+    error: (e) => resetAndClose(store.video, e)
   });
   const audioEncoder = new AudioEncoder({
     output: (chunk, metadata) => {
+      if (closed()) {
+        audioEncoder.close();
+        return;
+      }
+
       console.info('Encoded audio chunk');
       sharedQueue.audio.encoded += 1;
       muxAudio(chunk, metadata);
     },
-    error: console.error
+    error: (e) => resetAndClose(store.audio, e)
   });
+
+  store.audio = audioEncoder;
+  store.video = videoEncoder;
 
   // Configure and reset if not supported. More sophisticated fallback recommended.
   videoEncoder.configure({
@@ -87,18 +108,35 @@ type DecodeAudioConfig = {
  */
 const buildAndConfigureDecoders = async (
   videoConfig: DecodeVideoConfig,
-  audioConfig: DecodeAudioConfig | undefined
+  audioConfig: DecodeAudioConfig | undefined,
+  resetAndClose: (decoder: VideoDecoder | AudioDecoder | undefined, error: DOMException) => void
 ): Promise<{
   audioDecoder?: AudioDecoder;
   videoDecoder: VideoDecoder;
 }> => {
+  const store: Partial<{
+    video: VideoDecoder;
+    audio: AudioDecoder;
+  }> = {};
+
+  const closed = () =>
+    videoConfig.videoEncoder.state === 'closed' ||
+    audioConfig?.audioEncoder.state === 'closed' ||
+    store.video?.state === 'closed' ||
+    store.audio?.state === 'closed';
+
   // Build decoders.
   const videoDecoder = new VideoDecoder({
     output: (videoFrame) => {
+      if (closed()) {
+        videoFrame.close();
+        return;
+      }
+
       videoConfig.videoEncoder.encode(videoFrame);
       videoFrame.close();
     },
-    error: console.error
+    error: (e) => resetAndClose(store.video, e)
   });
 
   // Configure and reset if not supported. More sophisticated fallback recommended.
@@ -108,13 +146,21 @@ const buildAndConfigureDecoders = async (
   if (audioConfig) {
     audioDecoder = new AudioDecoder({
       output: (audioData) => {
+        if (closed()) {
+          audioData.close();
+          return;
+        }
+
         audioConfig.audioEncoder.encode(audioData);
         audioData.close();
       },
-      error: console.error
+      error: (e) => resetAndClose(store.audio, e)
     });
     audioDecoder.configure(audioConfig);
   }
+
+  store.audio = audioDecoder;
+  store.video = videoDecoder;
 
   return { audioDecoder, videoDecoder };
 };
@@ -127,11 +173,16 @@ const buildAndConfigureDecoders = async (
  * muxers. It counts the number of frames that have been decoded and encoded.
  */
 async function* syncEncodeDecode(
-  shared: SharedQueue['audio' | 'video']
+  shared: SharedQueue['audio' | 'video'],
+  error: DOMException | undefined = undefined
 ): AsyncGenerator<number, number> {
   let tries = 0;
   let lastEncoded = 0;
   while (tries < 50 && shared.encoded < shared.decoded) {
+    if (error) {
+      throw error;
+    }
+
     console.info('Waiting for video to encode', shared.encoded, shared.decoded);
     await new Promise((resolve) => setTimeout(resolve, 100));
 
@@ -194,6 +245,21 @@ export const decodeEncode = async (
       assertNever(kind);
   }
 
+  let error: DOMException | undefined = undefined;
+  const resetAndClose = (
+    encoder: VideoEncoder | AudioEncoder | VideoDecoder | AudioDecoder | undefined,
+    error_: DOMException
+  ) => {
+    if (encoder && encoder.state !== 'closed') {
+      encoder.reset();
+      encoder.close();
+    }
+
+    if (!error) {
+      error = error_;
+    }
+  };
+
   const { audioEncoder, videoEncoder } = await buildAndConfigureEncoders(
     muxer.addVideoChunk,
     muxer.addAudioChunk,
@@ -205,7 +271,8 @@ export const decodeEncode = async (
         sampleRate: decodeConfig.audio?.sampleRate ?? outputConfig.encoderAudio.sampleRate
       }
     },
-    sharedQueue
+    sharedQueue,
+    resetAndClose
   );
 
   assertDefined(decodeConfig.video.description);
@@ -224,7 +291,8 @@ export const decodeEncode = async (
           sampleRate: decodeConfig.audio.sampleRate,
           description: decodeConfig.audio.description // Checked above
         }
-      : undefined
+      : undefined,
+    resetAndClose
   );
 
   let demuxer: Demuxer;
@@ -253,10 +321,10 @@ export const decodeEncode = async (
   await demuxer.decode(file);
   console.info('OK');
 
-  for await (const progress of syncEncodeDecode(sharedQueue.video)) {
+  for await (const progress of syncEncodeDecode(sharedQueue.video, error)) {
     progressCallback(progress);
   }
-  for await (const _progress of syncEncodeDecode(sharedQueue.audio)) {
+  for await (const _progress of syncEncodeDecode(sharedQueue.audio, error)) {
     // Nothing
   }
 
