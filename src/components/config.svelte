@@ -11,10 +11,10 @@
   let panel: 'video' | 'audio' = 'video';
 
   const DEFAULT_VIDEO_CONFIG: VideoEncoderConfig = {
-    codec: 'avc1.42001f',
+    codec: 'avc1.4d0034',
     hardwareAcceleration: 'prefer-hardware',
-    width: 1280,
-    height: 720,
+    width: 1920,
+    height: 1080,
     avc: { format: 'annexb' }
   };
 
@@ -35,11 +35,17 @@
   $: {
     getSupportedVideoConfigs().then((configs) => {
       videoConfigs = configs;
-      globalVideoConfig = configs[0];
+      const allCodecs = configs.map((config) => config.codec);
+      if (!allCodecs.includes(globalVideoConfig.codec)) {
+        globalVideoConfig = configs[0];
+      }
     });
     getSupportedAudioConfigs().then((configs) => {
       audioConfigs = configs;
-      globalAudioConfig = configs[0];
+      const allCodecs = configs.map((config) => config.codec);
+      if (!allCodecs.includes(globalAudioConfig.codec)) {
+        globalAudioConfig = configs[0];
+      }
     });
   }
 </script>
@@ -74,17 +80,17 @@
 
   {#if panel === 'video'}
     <div>
-      <select bind:value={globalVideoConfig}>
+      <select bind:value={globalVideoConfig.codec}>
         {#each videoConfigs ?? [] as config}
-          <option value={config}>{VideoCodecs[config.codec].description}</option>
+          <option value={config.codec}>{VideoCodecs[config.codec].description}</option>
         {/each}
       </select>
     </div>
   {:else}
     <div>
-      <select bind:value={globalAudioConfig}>
+      <select bind:value={globalAudioConfig.codec}>
         {#each audioConfigs ?? [] as config}
-          <option value={config}>{AudioCodecs[config.codec].description}</option>
+          <option value={config.codec}>{AudioCodecs[config.codec].description}</option>
         {/each}
       </select>
     </div>
